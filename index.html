@@ -29,11 +29,20 @@
   <div id="map"></div>
   <aside id="panel">
     <p class="hint">Tap the map (or “My location”) to see the mushroom chance for that spot. Dots show major Swedish towns for the selected day.</p>
+    <section id="group" hidden>
+      <h3>👥 Group</h3>
+      <input id="gName" placeholder="Your name" maxlength="20" autocomplete="nickname">
+      <input id="gCode" placeholder="Group code" maxlength="32" autocapitalize="none">
+      <button id="gJoin">Join &amp; share my location</button>
+      <div id="gStatus" class="hint">Not sharing.</div>
+      <ul id="gList"></ul>
+    </section>
     <div id="detail" hidden>
       <h2 id="placeName"></h2>
       <div id="scoreBox"><span id="scoreNum"></span><span id="scoreLabel"></span></div>
       <div id="factors"></div>
       <div id="humidity"></div>
+      <div id="source" class="hint"></div>
       <h3>Last 60 days + 14-day forecast</h3>
       <div class="chartwrap"><canvas id="chartRecent"></canvas></div>
       <h3>Past 12 months (ERA5 history)</h3>
@@ -46,6 +55,7 @@
     </details>
     <details>
       <summary>How the score works</summary>
+      <p>Weather: MET Nordic 1 km (via Open-Meteo) for the next ~2.5 days, SMHI MESAN for current conditions, Open-Meteo for soil and the rest.</p>
       <p>A heuristic 0–100 score, not a guarantee. It combines: rain over the last 2–4 weeks (fungi fruit 1–3 weeks after soaking rain), 7-day mean air temperature, soil temperature (6 cm), relative humidity and soil moisture, with a penalty for frost and a seasonal curve peaking Aug–Oct. Forecast days use model forecasts, so the further ahead, the less certain.</p>
       <p>Data: <a href="https://open-meteo.com/">Open-Meteo</a> (forecast + ERA5 archive), no API key. Map © OpenStreetMap contributors.</p>
     </details>
@@ -53,7 +63,11 @@
 </main>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="config.js"></script>
 <script src="score.js"></script>
+<script src="weather.js"></script>
+<script src="share.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

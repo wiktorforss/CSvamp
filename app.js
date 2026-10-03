@@ -113,7 +113,11 @@ async function loadPoint(lat, lon) {
     hourly: "temperature_2m,relative_humidity_2m,precipitation,soil_temperature_6cm,soil_moisture_3_9cm",
     past_days: 60, forecast_days: 14,
   });
-  return hourlyToDaily((await getJSON(`${FORECAST}?${q}`)).hourly);
+  const [base, nordic] = await Promise.all([getJSON(`${FORECAST}?${q}`), fetchNordic(lat, lon, getJSON)]);
+  const overlaid = overlayHourly(base.hourly, nordic);
+  const daily = hourlyToDaily(base.hourly);
+  daily.sources = overlaid.length ? "Open-Meteo + MET Nordic 1 km" : "Open-Meteo";
+  return daily;
 }
 
 async function loadYear(lat, lon) {
@@ -137,15 +141,15 @@ async function pick(lat, lon, name) {
   setStatus("Loading weather for this spot…");
   if (!same) $("detail").hidden = true;
   try {
-    const [recent, year] = await Promise.all([loadPoint(lat, lon), loadYear(lat, lon).catch(() => null)]);
+    const [recent, year, mesan] = await Promise.all([loadPoint(lat, lon), loadYear(lat, lon).catch(() => null), fetchMesanNow(lat, lon, getJSON)]);
     setStatus("");
-    showDetail(name || `${lat.toFixed(3)}, ${lon.toFixed(3)}`, recent, year);
+    showDetail(name || `${lat.toFixed(3)}, ${lon.toFixed(3)}`, recent, year, mesan);
   } catch (e) {
     setStatus("Could not load weather: " + e.message);
   }
 }
 
-function showDetail(name, recent, year) {
+function showDetail(name, recent, year, mesan) {
   $("detail").hidden = false;
   $("placeName").textContent = name;
   const ti = recent.dates.indexOf(todayStr);
@@ -164,7 +168,9 @@ function showDetail(name, recent, year) {
 
   const rh = (i) => (recent.rh[i] == null ? "–" : Math.round(recent.rh[i]) + "%");
   const rhMean = (a, b) => { const v = recent.rh.slice(a, b + 1).filter((x) => x != null); return v.length ? Math.round(v.reduce((s, x) => s + x, 0) / v.length) + "%" : "–"; };
-  $("humidity").innerHTML = `<span>💧 Humidity today <b>${rh(ti)}</b></span><span>Tomorrow <b>${rh(ti + 1)}</b></span><span>Past 7 d avg <b>${rhMean(ti - 7, ti)}</b></span><span>Next 7 d avg <b>${rhMean(ti + 1, ti + 7)}</b></span>`;
+  $("humidity").innerHTML = `<span>💧 Humidity today <b>${rh(ti)}</b></span><span>Tomorrow <b>${rh(ti + 1)}</b></span><span>Past 7 d avg <b>${rhMean(ti - 7, ti)}</b></span><span>Next 7 d avg <b>${rhMean(ti + 1, ti + 7)}</b></span>`
+    + (mesan && (mesan.t != null || mesan.rh != null) ? `<span>SMHI now: <b>${mesan.t != null ? Math.round(mesan.t) + "°C" : ""}${mesan.rh != null ? " · " + Math.round(mesan.rh) + "%" : ""}${mesan.precip1h ? " · " + mesan.precip1h + " mm/h" : ""}</b></span>` : "");
+  $("source").textContent = "Data: " + (recent.sources || "Open-Meteo") + (mesan ? " + SMHI MESAN" : "");
   drawChart("chartRecent", recent, 14, recent.dates.length - 1);
   if (year) drawChart("chartYear", year, 0, year.dates.length - 1, true);
 }
@@ -204,7 +210,7 @@ function drawChart(id, series, from, to, skipFirst30) {
 map.on("click", (e) => pick(e.latlng.lat, e.latlng.lng));
 $("day").addEventListener("input", drawTowns);
 
-$("locate").addEventListener("click", () => {
+function startTracking() {
   if (!navigator.geolocation) return setStatus("Geolocation is not supported by this browser.");
   if (!window.isSecureContext) return setStatus("Location needs HTTPS (or localhost).");
   setStatus("Getting your location…");
@@ -218,9 +224,13 @@ $("locate").addEventListener("click", () => {
     } else {
       meMarker.setLatLng(ll); meCircle.setLatLng(ll).setRadius(pos.coords.accuracy);
     }
-    if (first) { first = false; map.setView(ll, 10); pick(ll[0], ll[1], "Your location"); }
-  }, (err) => setStatus("Location error: " + err.message), { enableHighAccuracy: true, maximumAge: 15000 });
-});
+    Share.publish({ lat: ll[0], lon: ll[1], acc: pos.coords.accuracy });
+    if (first) { first = false; setStatus(""); map.setView(ll, 10); pick(ll[0], ll[1], "Your location"); }
+  }, (err) => setStatus("Location error: " + err.message), { enableHighAccuracy: true, maximumAge: 5000 });
+}
+$("locate").addEventListener("click", startTracking);
+document.addEventListener("svamp:need-location", () => { if (watchId == null) startTracking(); });
+Share.init(map);
 
 const REFRESH_MS = 30 * 60 * 1000;
 let lastUpdate = 0;
