@@ -22,3 +22,8 @@ h3{font-size:14px;margin:16px 0 4px}
 details{margin-top:16px;font-size:13px;color:var(--muted)}
 .dot{border-radius:50%;border:2px solid #fff;box-shadow:0 0 3px #0008;color:#fff;font:700 11px/22px system-ui;text-align:center;width:26px;height:26px;line-height:22px}
 @media(max-width:800px){main{flex-direction:column}#panel{width:100%;border-left:0;border-top:1px solid var(--bd);max-height:55vh}#map{min-height:40vh}}
+#refresh{padding:8px 11px}
+#updated{font-size:12px;color:var(--muted)}
+#humidity{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}
+#humidity span{background:var(--card);border:1px solid var(--bd);border-radius:8px;padding:4px 8px;font-size:13px}
+body{padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)}

@@ -85,7 +85,7 @@ function drawTowns() {
 }
 
 // ---- Single point (hourly -> daily, incl. soil + humidity) ----
-function hourlyToDaily(h) {
+function hourlyToDaily(h, soilT = "soil_temperature_6cm", soilM = "soil_moisture_3_9cm") {
   const days = {};
   h.time.forEach((t, k) => {
     const d = t.slice(0, 10);
@@ -93,7 +93,7 @@ function hourlyToDaily(h) {
     const o = days[d];
     o.t.push(h.temperature_2m[k]); o.p.push(h.precipitation[k]);
     o.rh.push(h.relative_humidity_2m[k]);
-    o.st.push(h.soil_temperature_6cm[k]); o.sm.push(h.soil_moisture_3_9cm[k]);
+    o.st.push(h[soilT][k]); o.sm.push(h[soilM][k]);
   });
   const dates = Object.keys(days).sort();
   const avg = (a) => { const v = a.filter((x) => x != null); return v.length ? v.reduce((s, x) => s + x, 0) / v.length : null; };
@@ -122,17 +122,20 @@ async function loadYear(lat, lon) {
   const q = new URLSearchParams({
     latitude: lat, longitude: lon, timezone: "Europe/Stockholm",
     start_date: f(start), end_date: f(end),
-    daily: "temperature_2m_mean,temperature_2m_min,precipitation_sum",
+    hourly: "temperature_2m,relative_humidity_2m,precipitation,soil_temperature_0_to_7cm,soil_moisture_0_to_7cm",
   });
-  const d = (await getJSON(`${ARCHIVE}?${q}`)).daily;
-  return { dates: d.time, tmean: d.temperature_2m_mean, tmin: d.temperature_2m_min, precip: d.precipitation_sum };
+  const h = (await getJSON(`${ARCHIVE}?${q}`)).hourly;
+  return hourlyToDaily(h, "soil_temperature_0_to_7cm", "soil_moisture_0_to_7cm");
 }
 
+let selected = null;
 async function pick(lat, lon, name) {
+  const same = selected && selected.lat === lat && selected.lon === lon;
+  selected = { lat, lon, name };
   if (pickMarker) pickMarker.remove();
   pickMarker = L.marker([lat, lon]).addTo(map);
   setStatus("Loading weather for this spot…");
-  $("detail").hidden = true;
+  if (!same) $("detail").hidden = true;
   try {
     const [recent, year] = await Promise.all([loadPoint(lat, lon), loadYear(lat, lon).catch(() => null)]);
     setStatus("");
@@ -159,6 +162,9 @@ function showDetail(name, recent, year) {
   rows.push(`<div class="factor">Frost penalty: <b>${now.frost === 1 ? "none" : "×" + now.frost}</b> · Season factor: <b>${Math.round(now.season * 100)}%</b></div>`);
   $("factors").innerHTML = rows.join("");
 
+  const rh = (i) => (recent.rh[i] == null ? "–" : Math.round(recent.rh[i]) + "%");
+  const rhMean = (a, b) => { const v = recent.rh.slice(a, b + 1).filter((x) => x != null); return v.length ? Math.round(v.reduce((s, x) => s + x, 0) / v.length) + "%" : "–"; };
+  $("humidity").innerHTML = `<span>💧 Humidity today <b>${rh(ti)}</b></span><span>Tomorrow <b>${rh(ti + 1)}</b></span><span>Past 7 d avg <b>${rhMean(ti - 7, ti)}</b></span><span>Next 7 d avg <b>${rhMean(ti + 1, ti + 7)}</b></span>`;
   drawChart("chartRecent", recent, 14, recent.dates.length - 1);
   if (year) drawChart("chartYear", year, 0, year.dates.length - 1, true);
 }
@@ -176,6 +182,7 @@ function drawChart(id, series, from, to, skipFirst30) {
       datasets: [
         { type: "line", label: "Mushroom score", data: scores, borderColor: "#2e7d32", backgroundColor: "#2e7d3233", fill: true, pointRadius: 0, tension: 0.3, yAxisID: "y", order: 1 },
         { type: "bar", label: "Rain mm", data: idx.map((i) => series.precip[i]), backgroundColor: "#4a90d9aa", yAxisID: "y2", order: 2 },
+        { type: "line", label: "Humidity %", data: idx.map((i) => series.rh && series.rh[i] != null ? Math.round(series.rh[i]) : null), borderColor: "#00acc1", borderDash: [4, 3], pointRadius: 0, borderWidth: 1.5, yAxisID: "y4", order: 0 },
         { type: "line", label: "Temp °C", data: idx.map((i) => series.tmean[i]), borderColor: "#e57300", pointRadius: 0, borderWidth: 1.5, yAxisID: "y3", order: 0 },
       ],
     },
@@ -186,6 +193,7 @@ function drawChart(id, series, from, to, skipFirst30) {
         y: { min: 0, max: 100, title: { display: true, text: "score" } },
         y2: { position: "right", min: 0, grid: { drawOnChartArea: false }, title: { display: true, text: "mm" } },
         y3: { display: false },
+        y4: { display: false, min: 0, max: 100 },
       },
       plugins: { legend: { labels: { boxWidth: 12 } } },
     },
@@ -214,4 +222,22 @@ $("locate").addEventListener("click", () => {
   }, (err) => setStatus("Location error: " + err.message), { enableHighAccuracy: true, maximumAge: 15000 });
 });
 
-loadTowns().catch((e) => setStatus("Could not load town data: " + e.message));
+const REFRESH_MS = 30 * 60 * 1000;
+let lastUpdate = 0;
+async function refreshAll() {
+  $("refresh").disabled = true;
+  try {
+    await loadTowns();
+    if (selected) await pick(selected.lat, selected.lon, selected.name);
+    lastUpdate = Date.now();
+    $("updated").textContent = "Updated " + new Date(lastUpdate).toLocaleTimeString("sv-SE", { hour: "2-digit", minute: "2-digit" });
+  } catch (e) {
+    setStatus("Could not refresh: " + e.message + (lastUpdate ? " (showing older data)" : ""));
+  } finally { $("refresh").disabled = false; }
+}
+$("refresh").addEventListener("click", refreshAll);
+setInterval(() => { if (!document.hidden) refreshAll(); }, REFRESH_MS);
+document.addEventListener("visibilitychange", () => { if (!document.hidden && Date.now() - lastUpdate > REFRESH_MS) refreshAll(); });
+window.addEventListener("online", refreshAll);
+if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
+refreshAll();

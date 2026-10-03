@@ -2,7 +2,14 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#2e7d32">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Svampkoll">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <title>Svampkoll – Swedish mushroom chance</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <link rel="stylesheet" href="style.css">
@@ -15,6 +22,8 @@
     <input id="day" type="range" min="-14" max="7" value="0">
   </div>
   <button id="locate">📍 My location</button>
+  <button id="refresh" title="Refresh data">⟳</button>
+  <span id="updated"></span>
 </header>
 <main>
   <div id="map"></div>
@@ -24,12 +33,17 @@
       <h2 id="placeName"></h2>
       <div id="scoreBox"><span id="scoreNum"></span><span id="scoreLabel"></span></div>
       <div id="factors"></div>
+      <div id="humidity"></div>
       <h3>Last 60 days + 14-day forecast</h3>
       <div class="chartwrap"><canvas id="chartRecent"></canvas></div>
       <h3>Past 12 months (ERA5 history)</h3>
       <div class="chartwrap"><canvas id="chartYear"></canvas></div>
     </div>
     <div id="status"></div>
+    <details>
+      <summary>Install as an app</summary>
+      <p><b>iPhone/iPad (Safari):</b> Share → “Add to Home Screen”. <b>Android (Chrome):</b> menu ⋮ → “Install app” / “Add to Home screen”. Data refreshes automatically every 30 min and when you reopen the app.</p>
+    </details>
     <details>
       <summary>How the score works</summary>
       <p>A heuristic 0–100 score, not a guarantee. It combines: rain over the last 2–4 weeks (fungi fruit 1–3 weeks after soaking rain), 7-day mean air temperature, soil temperature (6 cm), relative humidity and soil moisture, with a penalty for frost and a seasonal curve peaking Aug–Oct. Forecast days use model forecasts, so the further ahead, the less certain.</p>
